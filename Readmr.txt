@@ -1,0 +1,31 @@
+        
+        if self.pinging:
+            for i in self.tree.get_children():
+                self.tree.delete(i)
+                
+            for index, host in enumerate(self.hosts):
+                success, response_time = ping(host)
+                status = 'Success' if success else 'Failed'
+                last_action_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                color = 'green' if success else 'red'
+                font = ('', 10, 'bold')
+                
+                self.tree.insert('', 'end', values=(host, status, f"{response_time:.2f}", last_action_time),
+                                 tags=(color,))
+                
+                self.tree.tag_configure('green', foreground='green', font=font)
+                self.tree.tag_configure('red', foreground='red', font=font)
+                
+                if index % 2 == 0:
+                    self.tree.tag_configure('even', background='#f0f0ff')
+                    self.tree.item(self.tree.get_children()[-1], tags=('even', color))
+                else:
+                    self.tree.tag_configure('odd', background='#ffffff')
+                    self.tree.item(self.tree.get_children()[-1], tags=('odd', color))
+                
+            self.root.after(self.interval * 1000, self.update_pings)
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = PingApp(root)
+    root.mainloop()
