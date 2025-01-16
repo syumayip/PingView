@@ -1,19 +1,60 @@
-import os
-import platform
-import subprocess
+import socket
+import struct
 import time
 import tkinter as tk
 from tkinter import ttk, filedialog
 from datetime import datetime
 
+def checksum(source_string):
+    sum = 0
+    count_to = (len(source_string) // 2) * 2
+    count = 0
+    while count < count_to:
+        this_val = (source_string[count + 1]) * 256 + (source_string[count])
+        sum = sum + this_val
+        sum = sum & 0xffffffff
+        count = count + 2
+    if count_to < len(source_string):
+        sum = sum + (source_string[len(source_string) - 1])
+        sum = sum & 0xffffffff
+    sum = (sum >> 16) + (sum & 0xffff)
+    sum = sum + (sum >> 16)
+    answer = ~sum
+    answer = answer & 0xffff
+    answer = answer >> 8 | (answer << 8 & 0xff00)
+    return answer
+
+def create_packet(identifier, sequence):
+    type = 8  # ICMP Echo Request
+    code = 0
+    my_checksum = 0
+    header = struct.pack("!BBHHH", type, code, my_checksum, identifier, sequence)
+    data = b"abcdefghijklmnopqrstuvwabcdefghi"
+    my_checksum = checksum(header + data)
+    header = struct.pack("!BBHHH", type, code, my_checksum, identifier, sequence)
+    packet = header + data
+    return packet
+
 def ping(host):
-    param = '-n' if platform.system().lower() == 'windows' else '-c'
-    command = ['ping', param, '1', host]
+    try:
+        dest_addr = socket.gethostbyname(host)
+    except socket.gaierror:
+        return False, 0
+    icmp = socket.getprotobyname("icmp")
+    sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, icmp)
+    packet = create_packet(identifier=12345, sequence=1)
     start_time = time.time()
-    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    end_time = time.time()
-    response_time = (end_time - start_time) * 1000  # Convert to milliseconds
-    return result.returncode == 0, response_time
+    sock.sendto(packet, (dest_addr, 1))
+    sock.settimeout(1)
+    try:
+        rec_packet, addr = sock.recvfrom(1024)
+        end_time = time.time()
+        response_time = (end_time - start_time) * 1000  # Convert to milliseconds
+        return True, response_time
+    except socket.timeout:
+        return False, 0
+    finally:
+        sock.close()
 
 class PingApp:
     def __init__(self, root):
